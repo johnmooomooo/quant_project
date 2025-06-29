@@ -55,6 +55,8 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
         if config.USE_RSI:
             buy_signal = buy_signal or (rsi_sig == 1)
             sell_signal = sell_signal or (rsi_sig == -1)
+        buy_signal = (row.name.minute % 2 == 0)
+        sell_signal = (row.name.minute % 2 != 0)
 
         # 买入逻辑
         if buy_signal:
