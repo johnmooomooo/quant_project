@@ -15,3 +15,12 @@ COMMISSION_RATE = 0.001        # 佣金比例（千分之一）
 
 # ===数据源配置===
 SYMBOLS = ["0700.HK", "AAPL", "TSLA"]
+
+# 策略参数范围
+TUNER_PARAMS = {
+    "fast_ma": [3, 5, 8],
+    "slow_ma": [10, 20, 30],
+    "rsi_limit": [45, 50, 55],
+    "takeprofit": [0.05, 0.08],
+    "stoploss": [0.02, 0.03]
+}
