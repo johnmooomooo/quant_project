@@ -1,4 +1,4 @@
-# quant_project/strategies/rsi_strategy.py
+import pandas as pd
 
 class RSIStrategy:
     def __init__(self, buy_th=30, sell_th=70):
