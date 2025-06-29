@@ -1,12 +1,10 @@
-# quant_project/tuner.py
-
 import yfinance as yf
 import pandas as pd
+import config
 from strategies.ma_strategy import MAStrategy
 from strategies.rsi_strategy import RSIStrategy
 from strategies.macd_strategy import MACDStrategy
 from backtest.backtester import Backtester
-import config
 
 # 只下载一次
 df = yf.download("0700.HK", interval="1d", period="1y")
@@ -29,6 +27,7 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
     for i in range(len(data)):
         row = data.iloc[i]
 
+        # 取信号
         try:
             ma_sig = float(row['ma_signal']) if not pd.isna(row['ma_signal']) else 0
         except:
@@ -42,9 +41,23 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
         except:
             rsi_sig = 0
 
-        buy_signal = (ma_sig == 1) or (macd_sig == 1) or (rsi_sig == 1)
-        sell_signal = (ma_sig == -1) or (macd_sig == -1) or (rsi_sig == -1)
+        # 策略可控开关
+        buy_signal = False
+        sell_signal = False
 
+        if config.USE_MA:
+            buy_signal = buy_signal or (ma_sig == 1)
+            sell_signal = sell_signal or (ma_sig == -1)
+
+        if config.USE_MACD:
+            buy_signal = buy_signal or (macd_sig == 1)
+            sell_signal = sell_signal or (macd_sig == -1)
+
+        if config.USE_RSI:
+            buy_signal = buy_signal or (rsi_sig == 1)
+            sell_signal = sell_signal or (rsi_sig == -1)
+
+        # 买
         if buy_signal:
             buy_budget = min(capital * config.ALLOCATE_PERCENTAGE, config.MAX_PER_TRADE)
             buy_qty = int(buy_budget // (row['Close'] * (1 + config.SLIPPAGE_RATE)))
@@ -60,6 +73,7 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
                 })
                 capital -= total_cost
 
+        # 卖
         if sell_signal:
             i_pos = 0
             while i_pos < len(positions):
@@ -84,10 +98,12 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
 def main():
     results = []
 
-    for ma_fast in range(3, 8):
-        for ma_slow in range(ma_fast + 5, ma_fast + 20):
-            for rsi_buy in range(20, 40, 5):
-                for rsi_sell in range(60, 85, 5):
+    tuner_cfg = config.TUNER_PARAMS
+
+    for ma_fast in tuner_cfg["ma_fast_range"]:
+        for ma_slow in tuner_cfg["ma_slow_range"]:
+            for rsi_buy in tuner_cfg["rsi_buy_range"]:
+                for rsi_sell in tuner_cfg["rsi_sell_range"]:
                     summary = run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell)
                     results.append({
                         "ma_fast": ma_fast,
@@ -99,11 +115,15 @@ def main():
                         "sharpe": summary['sharpe'],
                         "trades": summary['total_trades']
                     })
-                    print(f"✅ tested ma{ma_fast}/{ma_slow} rsi{rsi_buy}/{rsi_sell} PnL:{summary['total_pnl']:.2f}")
+                    print(
+                        f"✅ tested ma{ma_fast}/{ma_slow} rsi{rsi_buy}/{rsi_sell} "
+                        f"PnL:{summary['total_pnl']:.2f}"
+                    )
 
     df_results = pd.DataFrame(results)
     df_results = df_results.sort_values("total_pnl", ascending=False)
     df_results.to_csv("tuning_results.csv", index=False)
+    print("\n🏆 Top 10:")
     print(df_results.head(10))
 
 if __name__ == "__main__":
