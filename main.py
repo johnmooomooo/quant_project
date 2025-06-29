@@ -1,13 +1,22 @@
 import backtrader as bt
 import pandas as pd
-import config  # 加载配置
+import config
 
-class GoldenCross(bt.Strategy):
-    params = (("fast", 5), ("slow", 20),)
+class GoldenCrossWithRSI(bt.Strategy):
+    params = dict(
+        fast=5,
+        slow=20,
+        rsi_period=14,
+        rsi_limit=50,
+        takeprofit=0.05,
+        stoploss=0.03,
+    )
 
     def __init__(self):
         self.mas = dict()
         self.crossovers = dict()
+        self.rsis = dict()
+        self.buyprices = dict()
 
         for d in self.datas:
             self.mas[d._name] = {
@@ -18,23 +27,42 @@ class GoldenCross(bt.Strategy):
                 self.mas[d._name]["fast"],
                 self.mas[d._name]["slow"]
             )
+            self.rsis[d._name] = bt.indicators.RSI(d.close, period=self.p.rsi_period)
+            self.buyprices[d._name] = 0.0
 
     def next(self):
         for d in self.datas:
             pos = self.getposition(d)
             crossover = self.crossovers[d._name]
-            if not pos:
-                if crossover > 0:
-                    self.buy(data=d, size=100)
-                    print(f"✅ [{d._name}] 买入: {d.datetime.date(0)} @ {d.close[0]:.2f}")
-            else:
-                if crossover < 0:
+            rsi = self.rsis[d._name][0]
+
+            # 已经持仓
+            if pos:
+                # 止盈
+                if d.close[0] >= self.buyprices[d._name] * (1 + self.p.takeprofit):
+                    print(f"🎯 [{d._name}] 止盈卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
                     self.close(data=d)
-                    print(f"❌ [{d._name}] 卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+
+                # 止损
+                elif d.close[0] <= self.buyprices[d._name] * (1 - self.p.stoploss):
+                    print(f"⚠️ [{d._name}] 止损卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+                    self.close(data=d)
+
+                # 均线死叉
+                elif crossover < 0:
+                    self.close(data=d)
+                    print(f"❌ [{d._name}] 均线死叉卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+
+            # 无仓位
+            else:
+                if crossover > 0 and rsi < self.p.rsi_limit:
+                    self.buy(data=d, size=100)
+                    self.buyprices[d._name] = d.close[0]
+                    print(f"✅ [{d._name}] 买入: {d.datetime.date(0)} @ {d.close[0]:.2f} (RSI={rsi:.1f})")
 
 if __name__ == "__main__":
     cerebro = bt.Cerebro()
-    cerebro.addstrategy(GoldenCross)
+    cerebro.addstrategy(GoldenCrossWithRSI)
 
     for symbol in config.SYMBOLS:
         df = pd.read_csv(f"{symbol}.csv", index_col=0, parse_dates=True, skiprows=[1,2])
@@ -52,4 +80,4 @@ if __name__ == "__main__":
     cerebro.run()
     print(f"结束资金: {cerebro.broker.getvalue():.2f}")
 
-    # cerebro.plot()  # 需要可视化再打开
+    # cerebro.plot()
