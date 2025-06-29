@@ -74,9 +74,10 @@ for p in param_combinations:
         max_hold_days=p[4],
     )
 
-    df = pd.read_csv("AAPL.csv", index_col=0, skiprows=[1], parse_dates=True)
-    df.index = pd.to_datetime(df.index)  # 强制确保是 DatetimeIndex
+    df = pd.read_csv("AAPL.csv", index_col=0, skiprows=[1,2], parse_dates=True)
+    df.index = pd.to_datetime(df.index)
     df = df.astype(float)
+
 
 
 
