@@ -43,13 +43,12 @@ def run_backtest(symbol, fast, slow):
 
     df = pd.read_csv(f"data/{symbol}.csv", parse_dates=True, index_col=0)
 
-    # 过滤掉任何非数字行
-    df = df[pd.to_numeric(df["Close"], errors="coerce").notnull()]
-    df["Open"] = pd.to_numeric(df["Open"], errors="coerce")
-    df["High"] = pd.to_numeric(df["High"], errors="coerce")
-    df["Low"] = pd.to_numeric(df["Low"], errors="coerce")
-    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-    df["Volume"] = pd.to_numeric(df["Volume"], errors="coerce")
+    # 强制转换index为Timestamp
+    df.index = pd.to_datetime(df.index, errors="coerce")
+
+    # 转 float 并过滤
+    for col in ["Open", "High", "Low", "Close", "Volume"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna()
 
     data = bt.feeds.PandasData(dataname=df)
