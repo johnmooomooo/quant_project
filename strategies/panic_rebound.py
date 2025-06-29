@@ -2,64 +2,61 @@ import backtrader as bt
 
 class PanicRebound(bt.Strategy):
     params = dict(
-        panic_drop_pct = 0.02,     # 当日下跌超5%
-        panic_vol_ratio = 1.0,     # 当日成交量大于过去5日均量的1.5倍
-        hold_days = 5,             # 最长持有5天
-        takeprofit = 0.03,         # 止盈3%
-        stoploss = 0.03,           # 止损3%
+        panic_drop_pct=0.05,     # 恐慌跌幅阈值 5%
+        panic_vol_ratio=1.5,     # 恐慌放量阈值
+        hold_days=5,             # 最多持仓天数
+        takeprofit=0.03,         # 3%止盈
+        stoploss=0.03,           # 3%止损
     )
 
     def __init__(self):
         self.bbands = dict()
-        self.buy_signal = dict()
-        self.hold_counter = dict()
-        self.entry_prices = dict()
-        
         for d in self.datas:
             self.bbands[d._name] = bt.indicators.BollingerBands(d.close, period=20)
-            self.buy_signal[d._name] = False
-            self.hold_counter[d._name] = 0
-            self.entry_prices[d._name] = 0
 
     def next(self):
         for d in self.datas:
-            pos = self.getposition(d)
             name = d._name
+            pos = self.getposition(d)
             
             if not pos:
-                # 过去5日平均量
-                if len(d) < 5:
-                    continue
+                if len(d) < 21:
+                    continue  # 因为布林带20期需要足够数据
+
                 avg_vol = sum(d.volume.get(size=5)) / 5
-                
-                # 当天跌幅
                 drop_pct = (d.close[-1] - d.close[0]) / d.close[-1]
+                bb_bot = self.bbands[name].bot[0]
                 
-                # 是否恐慌
-                panic = (
-                    drop_pct < -self.p.panic_drop_pct and
-                    d.volume[0] > avg_vol * self.p.panic_vol_ratio and
-                    d.close[0] < self.bbands[name].bot[0]
+                # 🌟 调试打印
+                print(
+                    f"[DEBUG] {name} {d.datetime.date(0)} "
+                    f"drop={drop_pct:.2%}, vol={d.volume[0]:.0f}, "
+                    f"avg_vol={avg_vol:.0f}, close={d.close[0]:.2f}, bb_bot={bb_bot:.2f}"
                 )
-                
+
+                panic = (
+                    drop_pct < -self.p.panic_drop_pct
+                    and d.volume[0] > avg_vol * self.p.panic_vol_ratio
+                    and d.close[0] < bb_bot
+                )
+
                 if panic:
                     self.buy(data=d, size=100)
-                    self.entry_prices[name] = d.close[0]
-                    self.hold_counter[name] = 0
-                    print(f"[DEBUG] {name} drop_pct={drop_pct:.2%}, vol={d.volume[0]:.0f}, avg_vol={avg_vol:.0f}, bb_bot={self.bbands[name].bot[0]:.2f}, close={d.close[0]:.2f}")
-                    print(f"✅ [{name}] 触发恐慌买入 {d.datetime.date(0)} @ {d.close[0]:.2f}")
-                    
+                    self.entry_price = d.close[0]
+                    self.entry_bar = len(d)
+                    print(f"✅ [{name}] 恐慌买入: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+            
             else:
-                self.hold_counter[name] += 1
-                price_now = d.close[0]
-                entry = self.entry_prices[name]
-                
-                if price_now >= entry * (1 + self.p.takeprofit):
-                    print(f"🎯 [{name}] 止盈卖出 {d.datetime.date(0)} @ {price_now:.2f}")
+                # 持仓逻辑
+                bars_held = len(d) - self.entry_bar
+                pnl = (d.close[0] - self.entry_price) / self.entry_price
+
+                if pnl > self.p.takeprofit:
                     self.close(data=d)
-                elif price_now <= entry * (1 - self.p.stoploss):
-                    print(f"⚠️ [{name}] 止损卖出 {d.datetime.date(0)} @ {price_now:.2f}")
+                    print(f"🎯 [{name}] 止盈卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+                elif pnl < -self.p.stoploss:
                     self.close(data=d)
-                elif self.hold_counter[name] >= self.p.hold_days:
-                    print(f"⏰ [{name}] 超时平仓 {d.datetime.date(0)} @ {price_now:.2f}")
+                    print(f"🛑 [{name}] 止损卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+                elif bars_held >= self.p.hold_days:
                     self.close(data=d)
+                    print(f"⏰ [{name}] 超时卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")

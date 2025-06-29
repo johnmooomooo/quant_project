@@ -9,3 +9,4 @@ for i in range(5, len(df)):
     avg_vol = df['Volume'].iloc[i-5:i].mean()
     if drop_pct >= 0.05:
         print(f"{df.index[i]}: drop={drop_pct:.2%}, vol={df['Volume'].iloc[i]:.0f}, avg_vol={avg_vol:.0f}")
+        
