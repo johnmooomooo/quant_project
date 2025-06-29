@@ -74,8 +74,9 @@ for p in param_combinations:
         max_hold_days=p[4],
     )
 
-    df = pd.read_csv("AAPL.csv", index_col=0, parse_dates=True)
+    df = pd.read_csv("AAPL.csv", index_col=0, skiprows=[1], parse_dates=True)
     df = df.astype(float)
+
 
     data = bt.feeds.PandasData(dataname=df)
     cerebro.adddata(data)
