@@ -1,7 +1,7 @@
 import yfinance as yf
 import config
 
-def download_data():
+def download_data_json():
     for symbol in config.SYMBOLS:
         print(f"⏬ 下载 {symbol} ...")
         df = yf.download(
@@ -12,17 +12,15 @@ def download_data():
             progress=False,
             auto_adjust=False,
         )
-
         if not df.empty:
-            # 只保留需要的列
+            # 只保留需要列
             df = df[["Open", "High", "Low", "Close", "Volume"]]
-            # 索引改名
             df.index.name = "Date"
-            # 保存
-            df.to_csv(f"{symbol}.csv")
-            print(f"✅ {symbol}.csv 已保存，行数: {len(df)}")
+            # 转dict后保存
+            df.reset_index().to_json(f"{symbol}.json", orient="records", date_format="iso")
+            print(f"✅ {symbol}.json 已保存，行数: {len(df)}")
         else:
             print(f"⚠️ {symbol} 下载失败或无数据")
 
 if __name__ == "__main__":
-    download_data()
+    download_data_json()
