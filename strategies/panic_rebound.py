@@ -2,8 +2,8 @@ import backtrader as bt
 
 class PanicRebound(bt.Strategy):
     params = dict(
-        panic_drop_pct = 0.05,     # 当日下跌超5%
-        panic_vol_ratio = 1.5,     # 当日成交量大于过去5日均量的1.5倍
+        panic_drop_pct = 0.02,     # 当日下跌超5%
+        panic_vol_ratio = 1.0,     # 当日成交量大于过去5日均量的1.5倍
         hold_days = 5,             # 最长持有5天
         takeprofit = 0.03,         # 止盈3%
         stoploss = 0.03,           # 止损3%
