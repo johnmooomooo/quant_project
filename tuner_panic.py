@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     for symbol in config.SYMBOLS:
         data = bt.feeds.GenericCSVData(
-            dataname=f"{symbol}.csv",
+            dataname=f"data/{symbol}.csv",
             dtformat="%Y-%m-%d",
             timeframe=bt.TimeFrame.Days,
             compression=1,
