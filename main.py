@@ -4,12 +4,12 @@ import config
 
 class GoldenCrossWithRSI(bt.Strategy):
     params = dict(
-        fast=5,
-        slow=20,
+        fast=8,
+        slow=30,
         rsi_period=14,
-        rsi_limit=50,
+        rsi_limit=55,
         takeprofit=0.05,
-        stoploss=0.03,
+        stoploss=0.02,
     )
 
     def __init__(self):
@@ -36,7 +36,6 @@ class GoldenCrossWithRSI(bt.Strategy):
             crossover = self.crossovers[d._name]
             rsi = self.rsis[d._name][0]
 
-            # 已经持仓
             if pos:
                 # 止盈
                 if d.close[0] >= self.buyprices[d._name] * (1 + self.p.takeprofit):
@@ -50,10 +49,9 @@ class GoldenCrossWithRSI(bt.Strategy):
 
                 # 均线死叉
                 elif crossover < 0:
-                    self.close(data=d)
                     print(f"❌ [{d._name}] 均线死叉卖出: {d.datetime.date(0)} @ {d.close[0]:.2f}")
+                    self.close(data=d)
 
-            # 无仓位
             else:
                 if crossover > 0 and rsi < self.p.rsi_limit:
                     self.buy(data=d, size=100)
@@ -62,11 +60,18 @@ class GoldenCrossWithRSI(bt.Strategy):
 
 if __name__ == "__main__":
     cerebro = bt.Cerebro()
-    cerebro.addstrategy(GoldenCrossWithRSI)
+    cerebro.addstrategy(
+        GoldenCrossWithRSI,
+        fast=8,
+        slow=30,
+        rsi_limit=55,
+        takeprofit=0.05,
+        stoploss=0.02
+    )
 
     for symbol in config.SYMBOLS:
         df = pd.read_csv(f"{symbol}.csv", index_col=0, parse_dates=True, skiprows=[1,2])
-        df = df[["Close","High","Low","Open","Volume"]]
+        df = df[["Close", "High", "Low", "Open", "Volume"]]
         df = df.dropna()
         df = df.astype(float)
         data = bt.feeds.PandasData(dataname=df)
@@ -80,4 +85,5 @@ if __name__ == "__main__":
     cerebro.run()
     print(f"结束资金: {cerebro.broker.getvalue():.2f}")
 
+    # 如果你需要可视化就取消下面
     # cerebro.plot()
