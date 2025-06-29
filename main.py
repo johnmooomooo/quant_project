@@ -1,5 +1,6 @@
 import backtrader as bt
 import pandas as pd
+import json
 import config
 
 class GoldenCrossWithRSI(bt.Strategy):
@@ -60,13 +61,16 @@ class GoldenCrossWithRSI(bt.Strategy):
 
 if __name__ == "__main__":
     cerebro = bt.Cerebro()
+    with open("best_params.json") as f:
+        best_params = json.load(f)
+
     cerebro.addstrategy(
         GoldenCrossWithRSI,
-        fast=8,
-        slow=30,
-        rsi_limit=55,
-        takeprofit=0.05,
-        stoploss=0.02
+        fast=best_params["fast"],
+        slow=best_params["slow"],
+        rsi_limit=best_params["rsi_limit"],
+        takeprofit=best_params["takeprofit"],
+        stoploss=best_params["stoploss"]
     )
 
     for symbol in config.SYMBOLS:

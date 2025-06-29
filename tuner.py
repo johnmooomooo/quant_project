@@ -1,5 +1,6 @@
 import backtrader as bt
 import pandas as pd
+import json
 import config
 import itertools
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -114,3 +115,15 @@ if __name__ == "__main__":
                 best_params = (fast, slow, rsi_limit, tp, sl)
 
     print(f"\n🏆 最佳参数: fast={best_params[0]}, slow={best_params[1]}, rsi={best_params[2]}, tp={best_params[3]}, sl={best_params[4]} → PnL={best_pnl:.2f}")
+
+    # after finding best_params
+    with open("best_params.json", "w") as f:
+        json.dump({
+            "fast": best_params[0],
+            "slow": best_params[1],
+            "rsi_limit": best_params[2],
+            "takeprofit": best_params[3],
+            "stoploss": best_params[4]
+        }, f, indent=2)
+
+    print("✅ 已保存 best_params.json")
