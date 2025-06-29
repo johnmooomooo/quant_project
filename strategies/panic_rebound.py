@@ -27,12 +27,6 @@ class PanicRebound(bt.Strategy):
                 drop_pct = (d.close[-1] - d.close[0]) / d.close[-1]
                 bb_bot = self.bbands[name].bot[0]
                 
-                # 🌟 调试打印
-                print(
-                    f"[DEBUG] {name} {d.datetime.date(0)} "
-                    f"drop={drop_pct:.2%}, vol={d.volume[0]:.0f}, "
-                    f"avg_vol={avg_vol:.0f}, close={d.close[0]:.2f}, bb_bot={bb_bot:.2f}"
-                )
 
                 panic = (
                     drop_pct < -self.p.panic_drop_pct
