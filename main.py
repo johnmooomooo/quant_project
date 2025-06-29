@@ -12,7 +12,7 @@ from backtest.backtester import Backtester
 notifier = Notifier()
 
 async def main():
-    # 下载5天的5分钟K线
+    # 下载5天5分钟K线
     df = yf.download("0700.HK", interval="5m", period="5d")
 
     # 初始化策略
@@ -33,19 +33,24 @@ async def main():
     for i in range(len(df)):
         row = df.iloc[i]
 
-        # 防止 NaN 造成 Series 比较
-        buy_signal = (
-            (pd.notna(row['ma_signal']) and row['ma_signal'] == 1)
-            or (pd.notna(row['macd_signal']) and row['macd_signal'] == 1)
-            or (pd.notna(row['rsi_signal']) and row['rsi_signal'] == 1)
-        )
-        sell_signal = (
-            (pd.notna(row['ma_signal']) and row['ma_signal'] == -1)
-            or (pd.notna(row['macd_signal']) and row['macd_signal'] == -1)
-            or (pd.notna(row['rsi_signal']) and row['rsi_signal'] == -1)
-        )
+        # 避免 Series 比较歧义
+        try:
+            ma_sig = float(row['ma_signal']) if not pd.isna(row['ma_signal']) else 0
+        except:
+            ma_sig = 0
+        try:
+            macd_sig = float(row['macd_signal']) if not pd.isna(row['macd_signal']) else 0
+        except:
+            macd_sig = 0
+        try:
+            rsi_sig = float(row['rsi_signal']) if not pd.isna(row['rsi_signal']) else 0
+        except:
+            rsi_sig = 0
 
-        # 买入逻辑
+        buy_signal = (ma_sig == 1) or (macd_sig == 1) or (rsi_sig == 1)
+        sell_signal = (ma_sig == -1) or (macd_sig == -1) or (rsi_sig == -1)
+
+        # 买入
         if buy_signal:
             buy_budget = min(capital * config.ALLOCATE_PERCENTAGE, config.MAX_PER_TRADE)
             buy_qty = int(buy_budget // (row['Close'] * (1 + config.SLIPPAGE_RATE)))
@@ -64,7 +69,7 @@ async def main():
                     f"📈 买入 {buy_qty}股 @ {deal_price:.2f}, 手续费:{commission:.2f}, 剩余:{capital:.2f}"
                 )
 
-        # 卖出逻辑
+        # 卖出
         if sell_signal:
             i_pos = 0
             while i_pos < len(positions):
@@ -77,7 +82,6 @@ async def main():
                 pnl_pct = pnl / (pos['price'] * pos['qty']) * 100
                 capital += net_income
 
-                # 回测模块
                 bt.record_trade(
                     entry=pos['price'],
                     exit_=deal_price,
@@ -90,9 +94,9 @@ async def main():
                     f"📉 卖出 {pos['qty']}股 @ {deal_price:.2f}, 盈亏:{pnl:.2f} ({pnl_pct:.2f}%), 剩余:{capital:.2f}"
                 )
                 positions.pop(i_pos)
-            # 不需要i_pos+=1，因为pop后自动下移
+            # pop后元素下移，不用i_pos+=1
 
-        # 止损逻辑
+        # 止损
         i_pos = 0
         while i_pos < len(positions):
             pos = positions[i_pos]
@@ -105,7 +109,6 @@ async def main():
                 pnl_pct = pnl / (pos['price'] * pos['qty']) * 100
                 capital += net_income
 
-                # 回测模块
                 bt.record_trade(
                     entry=pos['price'],
                     exit_=deal_price,
@@ -125,7 +128,7 @@ async def main():
     summary = bt.summary()
     await notifier.send(
         f"""
-🏁 回测完毕
+🏁 回测结束
 总收益: {summary['total_pnl']:.2f}
 最大回撤: {summary['max_drawdown']*100:.2f}%
 夏普比率: {summary['sharpe']:.2f}
