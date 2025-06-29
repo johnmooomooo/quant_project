@@ -1,91 +1,84 @@
-# tuner_panic.py
-
 import backtrader as bt
 import pandas as pd
 import itertools
+import concurrent.futures
 import json
-from concurrent.futures import ProcessPoolExecutor
 import os
 
-# 配置
-INITIAL_CAPITAL = 100_000
+# 读取 symbols
 SYMBOLS = ["AAPL", "TSLA", "0700.HK"]
 
-# 参数范围
-PARAM_GRID = {
-    "drop_pct": [0.05, 0.07, 0.1],
-    "volume_mult": [1.2, 1.5],
-    "takeprofit": [0.03, 0.05],
-    "stoploss": [0.02, 0.03],
+# 定义可调参数
+param_grid = {
+    "drop_pct": [5, 6, 7],           # 恐慌下跌阈值
+    "volume_mult": [1.2, 1.5],       # 放量因子
+    "takeprofit": [0.03, 0.05],      # 止盈
+    "stoploss": [0.02, 0.03],        # 止损
 }
 
-# 策略
+# 组合参数
+all_params = list(itertools.product(
+    param_grid["drop_pct"],
+    param_grid["volume_mult"],
+    param_grid["takeprofit"],
+    param_grid["stoploss"]
+))
+
+# 回测策略
 class PanicRebound(bt.Strategy):
     params = dict(
-        drop_pct=0.05,
+        drop_pct=5,
         volume_mult=1.5,
         takeprofit=0.05,
         stoploss=0.02,
-        hold_days=5
+        maxhold=5
     )
 
     def __init__(self):
         self.order = None
         self.buyprice = None
-        self.hold_bars = 0
 
     def next(self):
         if self.position:
-            self.hold_bars += 1
             # 止盈
             if self.data.close[0] >= self.buyprice * (1 + self.p.takeprofit):
                 self.close()
-                self.hold_bars = 0
+                print(f"🎯 [{self.data._name}] 止盈卖出: {self.data.datetime.date(0)} @ {self.data.close[0]:.2f}")
             # 止损
             elif self.data.close[0] <= self.buyprice * (1 - self.p.stoploss):
                 self.close()
-                self.hold_bars = 0
-            # 超过最大持仓天数
-            elif self.hold_bars >= self.p.hold_days:
+                print(f"🛑 [{self.data._name}] 止损卖出: {self.data.datetime.date(0)} @ {self.data.close[0]:.2f}")
+            # 超时
+            elif len(self) - self.bar_executed >= self.p.maxhold:
                 self.close()
-                self.hold_bars = 0
+                print(f"⏰ [{self.data._name}] 超时卖出: {self.data.datetime.date(0)} @ {self.data.close[0]:.2f}")
         else:
-            if len(self.data) < 2:
+            # 检测恐慌下跌
+            if len(self.data.close) < 2:
                 return
-            drop = (self.data.close[-1] - self.data.close[0]) / self.data.close[-1]
+            prev_close = self.data.close[-1]
+            drop = (prev_close - self.data.close[0]) / prev_close
             avg_vol = pd.Series(self.data.volume.get(size=20)).mean()
             if (
-                drop <= -self.p.drop_pct
+                drop >= self.p.drop_pct / 100
                 and self.data.volume[0] >= avg_vol * self.p.volume_mult
             ):
-                self.buyprice = self.data.close[0]
                 self.buy()
-                self.hold_bars = 0
+                self.buyprice = self.data.close[0]
+                self.bar_executed = len(self)
+                print(f"✅ [{self.data._name}] 恐慌买入: {self.data.datetime.date(0)} @ {self.data.close[0]:.2f}")
 
-# 并行回测
 def run_backtest(symbol, drop_pct, volume_mult, takeprofit, stoploss):
     cerebro = bt.Cerebro()
-    cerebro.broker.set_cash(INITIAL_CAPITAL)
+    cerebro.broker.set_cash(100000)
 
-    # CSV 读取
-    def safe_date_parser(x):
-        try:
-            return pd.to_datetime(x, format="%Y-%m-%d")
-        except:
-            return pd.NaT
-
-    df = pd.read_csv(
-        f"{symbol}.csv",
-        index_col=0,
-        skiprows=[1],
-        parse_dates=True,
-        date_parser=safe_date_parser,
-    )
-    df.dropna(inplace=True)
+    df = pd.read_csv(f"{symbol}.csv", index_col=0, skiprows=[1], parse_dates=True)
+    df.index = pd.to_datetime(df.index, errors="coerce")
+    df = df.astype(float)
 
     data = bt.feeds.PandasData(dataname=df)
+    cerebro.adddata(data, name=symbol)
 
-    cerebro.adddata(data)
     cerebro.addstrategy(
         PanicRebound,
         drop_pct=drop_pct,
@@ -94,56 +87,40 @@ def run_backtest(symbol, drop_pct, volume_mult, takeprofit, stoploss):
         stoploss=stoploss,
     )
 
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="ta")
-    result = cerebro.run()
-    strat = result[0]
-
-    pnl = cerebro.broker.getvalue() - INITIAL_CAPITAL
-    trades = strat.analyzers.ta.get_analysis()
-    total_trades = trades.total.closed if trades.total else 0
-
-    summary = dict(
+    cerebro.run()
+    pnl = cerebro.broker.getvalue() - 100000
+    return dict(
         symbol=symbol,
         drop_pct=drop_pct,
         volume_mult=volume_mult,
         takeprofit=takeprofit,
         stoploss=stoploss,
-        pnl=round(pnl, 2),
-        total_trades=total_trades
+        pnl=round(pnl, 2)
     )
-    return summary
 
-# 并行执行
+# 解决 lambda 无法被多进程序列化
+def worker(args):
+    return run_backtest(*args)
+
 if __name__ == "__main__":
-    tasks = list(itertools.product(
-        SYMBOLS,
-        PARAM_GRID["drop_pct"],
-        PARAM_GRID["volume_mult"],
-        PARAM_GRID["takeprofit"],
-        PARAM_GRID["stoploss"],
-    ))
-
-    print(f"⚙️ 并行回测 {len(tasks)} 组参数...")
+    tasks = []
+    for symbol in SYMBOLS:
+        for drop_pct, volume_mult, takeprofit, stoploss in all_params:
+            tasks.append((symbol, drop_pct, volume_mult, takeprofit, stoploss))
 
     results = []
-    with ProcessPoolExecutor() as executor:
-        for res in executor.map(
-            lambda x: run_backtest(*x), tasks
-        ):
+    print(f"⚙️ 并行回测 {len(tasks)} 组参数...")
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for res in executor.map(worker, tasks):
             print(
-                f"✅ {res['symbol']} drop={res['drop_pct']}, vol_mult={res['volume_mult']}, "
-                f"tp={res['takeprofit']}, sl={res['stoploss']} → PnL={res['pnl']}"
+                f"✅ {res['symbol']} drop={res['drop_pct']} vol_mult={res['volume_mult']} "
+                f"tp={res['takeprofit']} sl={res['stoploss']} → PnL={res['pnl']}"
             )
             results.append(res)
 
-    # 保存为 JSON
-    with open("tuner_panic_results.json", "w") as f:
+    # 保存成 JSON
+    with open("panic_tuning_results.json", "w") as f:
         json.dump(results, f, indent=2)
 
-    # 也打印最优
-    best = max(results, key=lambda x: x["pnl"])
-    print(
-        f"\n🏆 最佳参数: {best['symbol']} drop={best['drop_pct']}, "
-        f"vol_mult={best['volume_mult']}, tp={best['takeprofit']}, "
-        f"sl={best['stoploss']} → PnL={best['pnl']}"
-    )
+    print("🏁 参数调优已完成，结果保存在 panic_tuning_results.json")
