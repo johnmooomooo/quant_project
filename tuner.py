@@ -8,29 +8,27 @@ from strategies.macd_strategy import MACDStrategy
 from backtest.backtester import Backtester
 import config
 
-def run_single_backtest(ma_fast, ma_slow, rsi_buy, rsi_sell):
-    # 下载日线
-    df = yf.download("0700.HK", interval="1d", period="1y")
+# 只下载一次
+df = yf.download("0700.HK", interval="1d", period="1y")
 
-    # 初始化策略
+def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
+    data = df.copy()
+
     ma = MAStrategy(fast=ma_fast, slow=ma_slow)
     macd = MACDStrategy()
     rsi = RSIStrategy(buy_th=rsi_buy, sell_th=rsi_sell)
 
-    # 信号
-    df = ma.generate_signal(df)
-    df = macd.generate_signal(df)
-    df = rsi.generate_signal(df)
+    data = ma.generate_signal(data)
+    data = macd.generate_signal(data)
+    data = rsi.generate_signal(data)
 
-    # 回测
     capital = config.INITIAL_CAPITAL
     positions = []
     bt = Backtester(initial_capital=capital)
 
-    for i in range(len(df)):
-        row = df.iloc[i]
+    for i in range(len(data)):
+        row = data.iloc[i]
 
-        # 转 float
         try:
             ma_sig = float(row['ma_signal']) if not pd.isna(row['ma_signal']) else 0
         except:
@@ -47,7 +45,6 @@ def run_single_backtest(ma_fast, ma_slow, rsi_buy, rsi_sell):
         buy_signal = (ma_sig == 1) or (macd_sig == 1) or (rsi_sig == 1)
         sell_signal = (ma_sig == -1) or (macd_sig == -1) or (rsi_sig == -1)
 
-        # 买
         if buy_signal:
             buy_budget = min(capital * config.ALLOCATE_PERCENTAGE, config.MAX_PER_TRADE)
             buy_qty = int(buy_budget // (row['Close'] * (1 + config.SLIPPAGE_RATE)))
@@ -63,7 +60,6 @@ def run_single_backtest(ma_fast, ma_slow, rsi_buy, rsi_sell):
                 })
                 capital -= total_cost
 
-        # 卖
         if sell_signal:
             i_pos = 0
             while i_pos < len(positions):
@@ -82,10 +78,8 @@ def run_single_backtest(ma_fast, ma_slow, rsi_buy, rsi_sell):
                     exit_time=row.name
                 )
                 positions.pop(i_pos)
-            # pop后，不+1
 
-    summary = bt.summary()
-    return summary
+    return bt.summary()
 
 def main():
     results = []
@@ -94,7 +88,7 @@ def main():
         for ma_slow in range(ma_fast + 5, ma_fast + 20):
             for rsi_buy in range(20, 40, 5):
                 for rsi_sell in range(60, 85, 5):
-                    summary = run_single_backtest(ma_fast, ma_slow, rsi_buy, rsi_sell)
+                    summary = run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell)
                     results.append({
                         "ma_fast": ma_fast,
                         "ma_slow": ma_slow,
@@ -107,10 +101,10 @@ def main():
                     })
                     print(f"✅ tested ma{ma_fast}/{ma_slow} rsi{rsi_buy}/{rsi_sell} PnL:{summary['total_pnl']:.2f}")
 
-    df = pd.DataFrame(results)
-    df = df.sort_values("total_pnl", ascending=False)
-    df.to_csv("tuning_results.csv", index=False)
-    print(df.head(10))
+    df_results = pd.DataFrame(results)
+    df_results = df_results.sort_values("total_pnl", ascending=False)
+    df_results.to_csv("tuning_results.csv", index=False)
+    print(df_results.head(10))
 
 if __name__ == "__main__":
     main()
