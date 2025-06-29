@@ -5,11 +5,11 @@ import config
 class GoldenCrossWithRSI(bt.Strategy):
     params = dict(
         fast=8,
-        slow=30,
+        slow=10,
         rsi_period=14,
-        rsi_limit=55,
-        takeprofit=0.05,
-        stoploss=0.02,
+        rsi_limit=45,
+        takeprofit=0.08,
+        stoploss=0.03,
     )
 
     def __init__(self):
