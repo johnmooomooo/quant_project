@@ -1,96 +1,96 @@
 import backtrader as bt
 import pandas as pd
-import itertools
+import multiprocessing
+import json
+import os
 
-# === 策略 ===
 class PanicRebound(bt.Strategy):
     params = dict(
-        panic_drop_pct=0.05,
+        drop_threshold=0.05,
         volume_multiplier=1.5,
+        hold_days=5,
         takeprofit=0.05,
-        stoploss=0.03,
-        max_hold_days=5,
+        stoploss=0.03
     )
 
     def __init__(self):
+        self.dataclose = self.datas[0].close
         self.order = None
-        self.buy_price = None
-        self.holding_days = 0
+        self.buyprice = None
+        self.bar_executed = None
 
     def next(self):
         if self.position:
-            self.holding_days += 1
             # 止盈
-            if self.data.close[0] >= self.buy_price * (1 + self.p.takeprofit):
-                self.sell()
+            if self.dataclose[0] >= self.buyprice * (1 + self.p.takeprofit):
+                self.close()
             # 止损
-            elif self.data.close[0] <= self.buy_price * (1 - self.p.stoploss):
-                self.sell()
-            # 超时
-            elif self.holding_days >= self.p.max_hold_days:
-                self.sell()
+            elif self.dataclose[0] <= self.buyprice * (1 - self.p.stoploss):
+                self.close()
+            # 超过最大持仓
+            elif len(self) - self.bar_executed >= self.p.hold_days:
+                self.close()
         else:
-            if len(self.data) < 20:
-                return  # 保障足够历史数据
+            if len(self.datas[0]) < 21:
+                return
+            drop_pct = (self.dataclose[-1] - self.dataclose[0]) / self.dataclose[-1]
+            avg_vol = sum(self.datas[0].volume.get(size=20)) / 20.0
+            if (
+                drop_pct <= -self.p.drop_threshold
+                and self.datas[0].volume[0] > avg_vol * self.p.volume_multiplier
+            ):
+                self.buyprice = self.dataclose[0]
+                self.order = self.buy()
+                self.bar_executed = len(self)
 
-            drop = (self.data.close[-1] - self.data.close[0]) / self.data.close[-1]
-            avg_vol = pd.Series(self.data.volume.get(size=20)).mean()
-            if drop < -self.p.panic_drop_pct and self.data.volume[0] > avg_vol * self.p.volume_multiplier:
-                self.buy_price = self.data.close[0]
-                self.holding_days = 0
-                self.buy()
-
-
-# === 参数网格 ===
-param_grid = {
-    'panic_drop_pct': [0.03, 0.05, 0.08],
-    'volume_multiplier': [1.2, 1.5, 2.0],
-    'takeprofit': [0.03, 0.05, 0.08],
-    'stoploss': [0.02, 0.03, 0.05],
-    'max_hold_days': [3, 5, 7],
-}
-
-param_combinations = list(itertools.product(
-    param_grid['panic_drop_pct'],
-    param_grid['volume_multiplier'],
-    param_grid['takeprofit'],
-    param_grid['stoploss'],
-    param_grid['max_hold_days'],
-))
-
-best_pnl = -999999
-best_params = None
-
-for p in param_combinations:
-    cerebro = bt.Cerebro()
-    cerebro.broker.set_cash(100000)
-
-    cerebro.addstrategy(
-        PanicRebound,
-        panic_drop_pct=p[0],
-        volume_multiplier=p[1],
-        takeprofit=p[2],
-        stoploss=p[3],
-        max_hold_days=p[4],
-    )
-
-    df = pd.read_csv("AAPL.csv", index_col=0, skiprows=[1,2], parse_dates=True)
-    df.index = pd.to_datetime(df.index)
-    df = df.astype(float)
-
-
-
+def run_backtest(symbol, params):
+    df = pd.read_csv(f"{symbol}.csv", index_col=0, skiprows=[1], parse_dates=True)
+    df.index = pd.to_datetime(df.index, errors="coerce")
+    df = df.dropna()
 
     data = bt.feeds.PandasData(dataname=df)
+
+    cerebro = bt.Cerebro()
+    cerebro.addstrategy(PanicRebound, **params)
     cerebro.adddata(data)
-
+    cerebro.broker.set_cash(100_000)
+    cerebro.broker.setcommission(commission=0.001)
     cerebro.run()
-    pnl = cerebro.broker.getvalue() - 100000
 
-    print(f"✅ panic={p[0]:.2%}, volx={p[1]}, tp={p[2]:.2%}, sl={p[3]:.2%}, hold={p[4]}d → PnL={pnl:.2f}")
+    return cerebro.broker.getvalue() - 100_000
 
-    if pnl > best_pnl:
-        best_pnl = pnl
-        best_params = p
+def worker(symbol, param_set):
+    pnl = run_backtest(symbol, param_set)
+    return (symbol, param_set, pnl)
 
-print(f"\n🏆 最优组合: panic={best_params[0]:.2%}, volx={best_params[1]}, tp={best_params[2]:.2%}, sl={best_params[3]:.2%}, hold={best_params[4]}d → PnL={best_pnl:.2f}")
+if __name__ == "__main__":
+    symbols = ["AAPL", "TSLA", "0700.HK"]
+    param_grid = []
+    for drop in [0.05, 0.08]:
+        for volmult in [1.5, 2]:
+            for hold in [3, 5]:
+                for tp in [0.03, 0.05]:
+                    for sl in [0.02, 0.03]:
+                        param_grid.append(dict(
+                            drop_threshold=drop,
+                            volume_multiplier=volmult,
+                            hold_days=hold,
+                            takeprofit=tp,
+                            stoploss=sl
+                        ))
+
+    tasks = []
+    with multiprocessing.Pool() as pool:
+        for symbol in symbols:
+            for params in param_grid:
+                tasks.append(pool.apply_async(worker, (symbol, params)))
+
+        results = [task.get() for task in tasks]
+
+    best = max(results, key=lambda x: x[2])
+    print(f"🏆 最佳参数: {best}")
+
+    with open("best_panic_params.json", "w") as f:
+        json.dump(best, f, indent=2)
+
+    print("✅ 最佳参数已写入 best_panic_params.json")
