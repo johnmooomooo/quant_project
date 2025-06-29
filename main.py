@@ -1,5 +1,6 @@
 import backtrader as bt
 import pandas as pd
+import config  # 加载配置
 
 class GoldenCross(bt.Strategy):
     params = (("fast", 5), ("slow", 20),)
@@ -9,7 +10,6 @@ class GoldenCross(bt.Strategy):
         self.crossovers = dict()
 
         for d in self.datas:
-            # 对每只股票都单独设置指标
             self.mas[d._name] = {
                 "fast": bt.indicators.SMA(d.close, period=self.p.fast),
                 "slow": bt.indicators.SMA(d.close, period=self.p.slow)
@@ -36,14 +36,13 @@ if __name__ == "__main__":
     cerebro = bt.Cerebro()
     cerebro.addstrategy(GoldenCross)
 
-    symbols = ["AAPL", "TSLA"]
-    for symbol in symbols:
+    for symbol in config.SYMBOLS:
         df = pd.read_csv(f"{symbol}.csv", index_col=0, parse_dates=True, skiprows=[1,2])
         df = df[["Close","High","Low","Open","Volume"]]
         df = df.dropna()
         df = df.astype(float)
         data = bt.feeds.PandasData(dataname=df)
-        data._name = symbol  # 给每个data取名
+        data._name = symbol
         cerebro.adddata(data)
 
     cerebro.broker.setcash(100000)
@@ -53,5 +52,4 @@ if __name__ == "__main__":
     cerebro.run()
     print(f"结束资金: {cerebro.broker.getvalue():.2f}")
 
-    # 如果需要画图就取消注释
-    # cerebro.plot()
+    # cerebro.plot()  # 需要可视化再打开

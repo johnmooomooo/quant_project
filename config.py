@@ -15,34 +15,3 @@ COMMISSION_RATE = 0.001        # 佣金比例（千分之一）
 
 # ===数据源配置===
 SYMBOLS = ["0700.HK", "AAPL", "TSLA"]
-INTERVAL = "15m"
-PERIOD = "1mo"
-
-# ===调优参数===
-TUNER_PARAMS = {
-    "ma_fast_range": [3, 5, 7],
-    "ma_slow_range": [10, 15, 20],
-    "rsi_buy_range": [30, 35, 40],
-    "rsi_sell_range": [60, 65, 70],
-}
-
-
-
-# ===策略启用开关===
-USE_MA = True
-USE_RSI = 0
-USE_MACD = 0
-
-
-# ===策略参数===
-MA_FAST = 3                    # 均线快速线周期
-MA_SLOW = 6                    # 均线慢速线周期
-
-RSI_BUY_THRESHOLD = 50         # RSI买入阈值
-RSI_SELL_THRESHOLD = 55        # RSI卖出阈值
-
-
-
-# ===调试参数===
-DEBUG = True                    # 调试模式，True时打印更多日志
-
