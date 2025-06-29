@@ -111,4 +111,23 @@ async def main():
                 )
 
                 await notifier.send(
-                    f"⚠️ 止损卖出 {pos['qty']}股 @ {de
+                    f"⚠️ 止损卖出 {pos['qty']}股 @ {deal_price:.2f}, 亏损:{pnl:.2f} ({pnl_pct:.2f}%), 剩余:{capital:.2f}"
+                )
+                positions.pop(i_pos)
+            else:
+                i_pos += 1
+
+    # 结束回测
+    summary = bt.summary()
+    await notifier.send(
+        f"""
+🏁 回测完毕
+总收益: {summary['total_pnl']:.2f}
+最大回撤: {summary['max_drawdown']*100:.2f}%
+夏普比率: {summary['sharpe']:.2f}
+总交易次数: {summary['total_trades']}
+"""
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
