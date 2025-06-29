@@ -75,7 +75,9 @@ for p in param_combinations:
     )
 
     df = pd.read_csv("AAPL.csv", index_col=0, skiprows=[1], parse_dates=True)
+    df.index = pd.to_datetime(df.index)  # 强制确保是 DatetimeIndex
     df = df.astype(float)
+
 
 
     data = bt.feeds.PandasData(dataname=df)
