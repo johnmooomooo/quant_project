@@ -6,16 +6,16 @@ from strategies.rsi_strategy import RSIStrategy
 from strategies.macd_strategy import MACDStrategy
 from backtest.backtester import Backtester
 
-# 只下载一次
-df = yf.download("0700.HK", interval="1d", period="1y")
 
 def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
     data = df.copy()
 
+    # 初始化策略
     ma = MAStrategy(fast=ma_fast, slow=ma_slow)
     macd = MACDStrategy()
     rsi = RSIStrategy(buy_th=rsi_buy, sell_th=rsi_sell)
 
+    # 生成信号
     data = ma.generate_signal(data)
     data = macd.generate_signal(data)
     data = rsi.generate_signal(data)
@@ -27,7 +27,6 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
     for i in range(len(data)):
         row = data.iloc[i]
 
-        # 取信号
         try:
             ma_sig = float(row['ma_signal']) if not pd.isna(row['ma_signal']) else 0
         except:
@@ -41,7 +40,7 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
         except:
             rsi_sig = 0
 
-        # 策略可控开关
+        # 策略开关
         buy_signal = False
         sell_signal = False
 
@@ -57,7 +56,7 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
             buy_signal = buy_signal or (rsi_sig == 1)
             sell_signal = sell_signal or (rsi_sig == -1)
 
-        # 买
+        # 买入逻辑
         if buy_signal:
             buy_budget = min(capital * config.ALLOCATE_PERCENTAGE, config.MAX_PER_TRADE)
             buy_qty = int(buy_budget // (row['Close'] * (1 + config.SLIPPAGE_RATE)))
@@ -73,7 +72,7 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
                 })
                 capital -= total_cost
 
-        # 卖
+        # 卖出逻辑
         if sell_signal:
             i_pos = 0
             while i_pos < len(positions):
@@ -95,36 +94,42 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
 
     return bt.summary()
 
+
 def main():
     results = []
-
     tuner_cfg = config.TUNER_PARAMS
 
-    for ma_fast in tuner_cfg["ma_fast_range"]:
-        for ma_slow in tuner_cfg["ma_slow_range"]:
-            for rsi_buy in tuner_cfg["rsi_buy_range"]:
-                for rsi_sell in tuner_cfg["rsi_sell_range"]:
-                    summary = run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell)
-                    results.append({
-                        "ma_fast": ma_fast,
-                        "ma_slow": ma_slow,
-                        "rsi_buy": rsi_buy,
-                        "rsi_sell": rsi_sell,
-                        "total_pnl": summary['total_pnl'],
-                        "max_dd": summary['max_drawdown'],
-                        "sharpe": summary['sharpe'],
-                        "trades": summary['total_trades']
-                    })
-                    print(
-                        f"✅ tested ma{ma_fast}/{ma_slow} rsi{rsi_buy}/{rsi_sell} "
-                        f"PnL:{summary['total_pnl']:.2f}"
-                    )
+    for symbol in config.SYMBOLS:
+        print(f"\n📊 正在下载数据: {symbol}")
+        df = yf.download(symbol, interval=config.INTERVAL, period=config.PERIOD)
+
+        for ma_fast in tuner_cfg["ma_fast_range"]:
+            for ma_slow in tuner_cfg["ma_slow_range"]:
+                for rsi_buy in tuner_cfg["rsi_buy_range"]:
+                    for rsi_sell in tuner_cfg["rsi_sell_range"]:
+                        summary = run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell)
+                        results.append({
+                            "symbol": symbol,
+                            "ma_fast": ma_fast,
+                            "ma_slow": ma_slow,
+                            "rsi_buy": rsi_buy,
+                            "rsi_sell": rsi_sell,
+                            "total_pnl": summary['total_pnl'],
+                            "max_dd": summary['max_drawdown'],
+                            "sharpe": summary['sharpe'],
+                            "trades": summary['total_trades']
+                        })
+                        print(
+                            f"✅ {symbol} | ma{ma_fast}/{ma_slow} rsi{rsi_buy}/{rsi_sell} "
+                            f"PnL:{summary['total_pnl']:.2f} Trades:{summary['total_trades']}"
+                        )
 
     df_results = pd.DataFrame(results)
     df_results = df_results.sort_values("total_pnl", ascending=False)
     df_results.to_csv("tuning_results.csv", index=False)
-    print("\n🏆 Top 10:")
+    print("\n🏆 Top 10 overall:")
     print(df_results.head(10))
+
 
 if __name__ == "__main__":
     main()

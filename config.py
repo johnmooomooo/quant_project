@@ -13,12 +13,16 @@ STOP_LOSS_PCT = 0.02           # 止损百分比（2%止损）
 SLIPPAGE_RATE = 0.001          # 滑点比例（千分之一）
 COMMISSION_RATE = 0.001        # 佣金比例（千分之一）
 
+# ===数据源配置===
+SYMBOLS = ["0700.HK", "AAPL", "TSLA"]
+INTERVAL = "5m"
+PERIOD = "5d"
 
 
 # ===策略启用开关===
 USE_MA = True
-USE_RSI = True
-USE_MACD = True
+USE_RSI = 0
+USE_MACD = 0
 
 
 # ===策略参数===
