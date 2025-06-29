@@ -1,7 +1,8 @@
 import backtrader as bt
 import pandas as pd
-import itertools
 import config
+import itertools
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 class GoldenCrossWithRSI(bt.Strategy):
     params = dict(
@@ -54,7 +55,11 @@ class GoldenCrossWithRSI(bt.Strategy):
                     self.buy(data=d, size=100)
                     self.buyprices[d._name] = d.close[0]
 
-def run_backtest(fast, slow, rsi_limit, tp, sl):
+def run_backtest(params):
+    fast, slow, rsi_limit, tp, sl = params
+    if fast >= slow:
+        return None  # 快线必须小于慢线
+
     cerebro = bt.Cerebro()
     cerebro.addstrategy(
         GoldenCrossWithRSI,
@@ -64,6 +69,7 @@ def run_backtest(fast, slow, rsi_limit, tp, sl):
         takeprofit=tp,
         stoploss=sl
     )
+
     for symbol in config.SYMBOLS:
         df = pd.read_csv(f"{symbol}.csv", index_col=0, parse_dates=True, skiprows=[1,2])
         df = df[["Close","High","Low","Open","Volume"]]
@@ -78,7 +84,7 @@ def run_backtest(fast, slow, rsi_limit, tp, sl):
     cerebro.run()
     final_value = cerebro.broker.getvalue()
     pnl = final_value - 100000
-    return pnl
+    return (fast, slow, rsi_limit, tp, sl, pnl)
 
 if __name__ == "__main__":
     grid = list(itertools.product(
@@ -92,13 +98,19 @@ if __name__ == "__main__":
     best_pnl = -999999
     best_params = None
 
-    for fast, slow, rsi_limit, tp, sl in grid:
-        if fast >= slow:
-            continue  # 均线快线必须小于慢线
-        pnl = run_backtest(fast, slow, rsi_limit, tp, sl)
-        print(f"✅ fast={fast}, slow={slow}, rsi={rsi_limit}, tp={tp}, sl={sl} → PnL={pnl:.2f}")
-        if pnl > best_pnl:
-            best_pnl = pnl
-            best_params = (fast, slow, rsi_limit, tp, sl)
+    futures = []
+    with ProcessPoolExecutor() as executor:
+        for params in grid:
+            futures.append(executor.submit(run_backtest, params))
+
+        for future in as_completed(futures):
+            result = future.result()
+            if result is None:
+                continue
+            fast, slow, rsi_limit, tp, sl, pnl = result
+            print(f"✅ fast={fast}, slow={slow}, rsi={rsi_limit}, tp={tp}, sl={sl} → PnL={pnl:.2f}")
+            if pnl > best_pnl:
+                best_pnl = pnl
+                best_params = (fast, slow, rsi_limit, tp, sl)
 
     print(f"\n🏆 最佳参数: fast={best_params[0]}, slow={best_params[1]}, rsi={best_params[2]}, tp={best_params[3]}, sl={best_params[4]} → PnL={best_pnl:.2f}")
