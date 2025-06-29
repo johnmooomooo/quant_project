@@ -15,6 +15,8 @@ COMMISSION_RATE = 0.001        # 佣金比例（千分之一）
 
 # ===数据源配置===
 SYMBOLS = ["0700.HK", "AAPL", "TSLA"]
+START_DATE = "2020-01-01"
+END_DATE = "2024-12-31"
 
 # 策略参数范围
 TUNER_PARAMS = {
