@@ -25,8 +25,8 @@ if __name__ == "__main__":
     cerebro = bt.Cerebro()
     cerebro.addstrategy(GoldenCross)
 
-    # 强制 float
-    df = pd.read_csv("AAPL.csv", index_col=0, parse_dates=True)
+    df = pd.read_csv("AAPL.csv", index_col=0, parse_dates=True, skiprows=[1,2])
+    df = df[["Close","High","Low","Open","Volume"]]
     df = df.dropna()
     df = df.astype(float)
 
