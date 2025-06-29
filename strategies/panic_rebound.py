@@ -37,7 +37,7 @@ class PanicRebound(bt.Strategy):
                 panic = (
                     drop_pct < -self.p.panic_drop_pct
                     and d.volume[0] > avg_vol * self.p.panic_vol_ratio
-                    and d.close[0] < bb_bot
+                    #and d.close[0] < bb_bot
                 )
 
                 if panic:
