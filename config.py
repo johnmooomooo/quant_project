@@ -26,4 +26,4 @@ TUNER_PARAMS = {
 }
 
 # ===调试参数===
-DEBUG = True                    # 调试模式，True时打印更多日志
+DEBUG = 0                    # 调试模式，True时打印更多日志
