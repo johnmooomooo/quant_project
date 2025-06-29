@@ -25,7 +25,11 @@ if __name__ == "__main__":
     cerebro = bt.Cerebro()
     cerebro.addstrategy(GoldenCross)
 
+    # 强制 float
     df = pd.read_csv("AAPL.csv", index_col=0, parse_dates=True)
+    df = df.dropna()
+    df = df.astype(float)
+
     data = bt.feeds.PandasData(dataname=df)
     cerebro.adddata(data)
 
