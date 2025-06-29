@@ -46,6 +46,7 @@ class PanicRebound(bt.Strategy):
                     self.buy(data=d, size=100)
                     self.entry_prices[name] = d.close[0]
                     self.hold_counter[name] = 0
+                    print(f"[DEBUG] {name} drop_pct={drop_pct:.2%}, vol={d.volume[0]:.0f}, avg_vol={avg_vol:.0f}, bb_bot={self.bbands[name].bot[0]:.2f}, close={d.close[0]:.2f}")
                     print(f"✅ [{name}] 触发恐慌买入 {d.datetime.date(0)} @ {d.close[0]:.2f}")
                     
             else:

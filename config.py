@@ -24,3 +24,6 @@ TUNER_PARAMS = {
     "takeprofit": [0.05, 0.08],
     "stoploss": [0.02, 0.03]
 }
+
+# ===调试参数===
+DEBUG = True                    # 调试模式，True时打印更多日志
