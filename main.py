@@ -1,5 +1,5 @@
 import backtrader as bt
-from datetime import datetime
+import pandas as pd
 
 class GoldenCross(bt.Strategy):
     params = (
@@ -8,10 +8,8 @@ class GoldenCross(bt.Strategy):
     )
 
     def __init__(self):
-        # 定义均线
         self.ma_fast = bt.indicators.SMA(self.data.close, period=self.p.fast)
         self.ma_slow = bt.indicators.SMA(self.data.close, period=self.p.slow)
-        # 定义交叉
         self.crossover = bt.indicators.CrossOver(self.ma_fast, self.ma_slow)
 
     def next(self):
@@ -27,12 +25,8 @@ if __name__ == "__main__":
     cerebro = bt.Cerebro()
     cerebro.addstrategy(GoldenCross)
 
-    # 加载 AAPL 一整年的数据
-    data = bt.feeds.YahooFinanceData(
-        dataname="AAPL",
-        fromdate=datetime(2023, 1, 1),
-        todate=datetime(2023, 12, 31)
-    )
+    df = pd.read_csv("AAPL.csv", index_col=0, parse_dates=True)
+    data = bt.feeds.PandasData(dataname=df)
     cerebro.adddata(data)
 
     cerebro.broker.setcash(100000)
