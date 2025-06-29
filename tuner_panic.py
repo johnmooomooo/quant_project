@@ -41,7 +41,17 @@ def run_backtest(symbol, fast, slow):
     cerebro = bt.Cerebro()
     cerebro.broker.set_cash(100000)
 
-    df = pd.read_csv(f"data/{symbol}.csv", index_col=0, parse_dates=True)
+    df = pd.read_csv(f"data/{symbol}.csv", parse_dates=True, index_col=0)
+
+    # 过滤掉任何非数字行
+    df = df[pd.to_numeric(df["Close"], errors="coerce").notnull()]
+    df["Open"] = pd.to_numeric(df["Open"], errors="coerce")
+    df["High"] = pd.to_numeric(df["High"], errors="coerce")
+    df["Low"] = pd.to_numeric(df["Low"], errors="coerce")
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+    df["Volume"] = pd.to_numeric(df["Volume"], errors="coerce")
+    df = df.dropna()
+
     data = bt.feeds.PandasData(dataname=df)
     cerebro.adddata(data, name=symbol)
 
@@ -54,6 +64,7 @@ def run_backtest(symbol, fast, slow):
         "slow": slow,
         "final_value": final_value
     }
+
 
 
 if __name__ == "__main__":
