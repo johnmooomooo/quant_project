@@ -10,12 +10,10 @@ from backtest.backtester import Backtester
 def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
     data = df.copy()
 
-    # 初始化策略
     ma = MAStrategy(fast=ma_fast, slow=ma_slow)
     macd = MACDStrategy()
     rsi = RSIStrategy(buy_th=rsi_buy, sell_th=rsi_sell)
 
-    # 生成信号
     data = ma.generate_signal(data)
     data = macd.generate_signal(data)
     data = rsi.generate_signal(data)
@@ -45,8 +43,8 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
         sell_signal = False
 
         if config.USE_MA:
-            buy_signal = buy_signal or (ma_sig == 1)
-            sell_signal = sell_signal or (ma_sig == -1)
+            buy_signal = (ma_sig == 1)
+            sell_signal = (ma_sig == -1)
 
         if config.USE_MACD:
             buy_signal = buy_signal or (macd_sig == 1)
@@ -55,11 +53,9 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
         if config.USE_RSI:
             buy_signal = buy_signal or (rsi_sig == 1)
             sell_signal = sell_signal or (rsi_sig == -1)
-        buy_signal = (row.name.minute % 2 == 0)
-        sell_signal = (row.name.minute % 2 != 0)
 
-        # 买入逻辑
-        if buy_signal:
+        # 买
+        if buy_signal and not positions:
             buy_budget = min(capital * config.ALLOCATE_PERCENTAGE, config.MAX_PER_TRADE)
             buy_qty = int(buy_budget // (row['Close'] * (1 + config.SLIPPAGE_RATE)))
             if buy_qty > 0:
@@ -73,26 +69,25 @@ def run_single_backtest(df, ma_fast, ma_slow, rsi_buy, rsi_sell):
                     "entry_time": row.name
                 })
                 capital -= total_cost
+                print(f"✅ BUY {buy_qty} @ {deal_price:.2f} on {row.name}")
 
-        # 卖出逻辑
-        if sell_signal:
-            i_pos = 0
-            while i_pos < len(positions):
-                pos = positions[i_pos]
-                deal_price = row['Close'] * (1 - config.SLIPPAGE_RATE)
-                sell_value = deal_price * pos['qty']
-                commission = sell_value * config.COMMISSION_RATE
-                net_income = sell_value - commission
-                pnl = net_income - pos['price'] * pos['qty']
-                capital += net_income
-                bt.record_trade(
-                    entry=pos['price'],
-                    exit_=deal_price,
-                    qty=pos['qty'],
-                    entry_time=pos['entry_time'],
-                    exit_time=row.name
-                )
-                positions.pop(i_pos)
+        # 卖
+        if sell_signal and positions:
+            pos = positions.pop(0)
+            deal_price = row['Close'] * (1 - config.SLIPPAGE_RATE)
+            sell_value = deal_price * pos['qty']
+            commission = sell_value * config.COMMISSION_RATE
+            net_income = sell_value - commission
+            pnl = net_income - pos['price'] * pos['qty']
+            capital += net_income
+            bt.record_trade(
+                entry=pos['price'],
+                exit_=deal_price,
+                qty=pos['qty'],
+                entry_time=pos['entry_time'],
+                exit_time=row.name
+            )
+            print(f"❌ SELL {pos['qty']} @ {deal_price:.2f} on {row.name}")
 
     return bt.summary()
 

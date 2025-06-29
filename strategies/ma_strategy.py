@@ -1,5 +1,5 @@
 class MAStrategy:
-    def __init__(self, fast=5, slow=20):
+    def __init__(self, fast=3, slow=10):
         self.fast = fast
         self.slow = slow
 
@@ -11,14 +11,14 @@ class MAStrategy:
             if i < self.slow:
                 signal.append(0)
             elif df['ma_fast'].iloc[i-1] <= df['ma_slow'].iloc[i-1] and df['ma_fast'].iloc[i] > df['ma_slow'].iloc[i]:
-                signal.append(1)
+                signal.append(1)   # 金叉
             elif df['ma_fast'].iloc[i-1] >= df['ma_slow'].iloc[i-1] and df['ma_fast'].iloc[i] < df['ma_slow'].iloc[i]:
-                signal.append(-1)
+                signal.append(-1)  # 死叉
             else:
                 signal.append(0)
         df['ma_signal'] = signal
 
-        # 方便调试
+        # 验证
         print(df[['Close','ma_fast','ma_slow','ma_signal']].tail(20))
 
         return df
